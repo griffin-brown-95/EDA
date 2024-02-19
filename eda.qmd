@@ -30,14 +30,26 @@ library(fastDummies)
 library(corrplot)
 ```
 
-
 ```{r}
 
 app_train <- read.csv("C:\\Users\\gbrown\\OneDrive - uolf.org\\Desktop\\Masters\\IS 6812-001 Seminar 2\\home_credit\\application_train.csv")
 
-sample_train <- sample_n(app_train, 10000)
 
-write_csv(sample_train, "C:\\Users\\gbrown\\OneDrive - uolf.org\\Desktop\\Masters\\IS 6812-001 Seminar 2\\home_credit\\sample_train.csv")
+```
+
+```{r}
+app_train$TARGET <- factor(app_train$TARGET)
+
+app_train %>% 
+  count(TARGET) %>% 
+  mutate(perc = n/sum(n))
+
+app_train %>% 
+  count(TARGET) %>% 
+  mutate(perc = n / sum(n)) %>% 
+  ggplot(aes(x = TARGET, y = perc)) +
+  geom_bar(stat = 'identity') +
+  scale_y_continuous(labels = scales::percent_format())
 ```
 
 ```{r}
@@ -47,12 +59,23 @@ count_missings <- function(x) sum(is.na(x))
 app_train %>% 
   summarize_all(count_missings) %>% 
   select_if(function(x) x > 0)
-app_train %>% 
-  head()
+
 ```
+
 ```{r}
 app_train %>% 
   summary()
+```
+
+```{r}
+app_train %>% 
+  group_by(NAME_INCOME_TYPE) %>%
+  summarize(Total_DAYS_EMPLOYED = sum(DAYS_EMPLOYED, na.rm = TRUE)) %>% 
+  ggplot(aes(x = NAME_INCOME_TYPE, y = Total_DAYS_EMPLOYED, fill = NAME_INCOME_TYPE)) +
+  geom_bar(stat = "identity") +
+  scale_y_continuous(labels = scales::comma) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
 app_train %>% 
   filter(DAYS_EMPLOYED == 365243) %>% 
   nrow()
@@ -73,22 +96,6 @@ app_train %>%
   arrange(desc(AMT_INCOME_TOTAL)) %>% 
   slice_max(order_by = AMT_INCOME_TOTAL, n = 20)
 ```
-
-```{r}
-app_train$TARGET <- factor(app_train$TARGET, levels = c('0', '1'))
-
-app_train %>% 
-  count(TARGET) %>% 
-  mutate(perc = n/sum(n))
-
-app_train %>% 
-  count(TARGET) %>% 
-  mutate(perc = n / sum(n)) %>% 
-  ggplot(aes(x = TARGET, y = perc)) +
-  geom_bar(stat = 'identity') +
-  scale_y_continuous(labels = scales::percent_format())
-```
-
 
 ```{r}
 # function to factor character variables
@@ -130,6 +137,7 @@ sorted_cor_with_target <- sort(cor_with_target, decreasing = TRUE) # Sort correl
 # View the sorted correlations
 print(sorted_cor_with_target)
 ```
+
 ```{r}
 app_train %>% 
   ggplot()+
@@ -151,25 +159,33 @@ corrplot(cor_matrix_ordered, order = "hclust", addrect = 5, tl.cex = 0.2) # Adds
 
 ```
 
-
 ```{r}
 character_app_train <- app_train %>%
   select(-SK_ID_CURR) %>%
   select(where(~ !is.numeric(.))) %>%
   mutate_if(is.character, as.factor)
 
-glimpse(character_app_train)
+character_app_train %>%
+  summarise(across(where(is.factor), ~nlevels(.))) %>%
+  print()
+```
 
-sample_character <- sample_n(character_app_train, 10000)
+```{r}
+# glm(TARGET ~ . - ORGANIZATION_TYPE, family = binomial, data = character_app_train) %>% summary()
 
-write_csv(sample_character, "C:\\Users\\gbrown\\OneDrive - uolf.org\\Desktop\\Masters\\IS 6812-001 Seminar 2\\home_credit\\sample_character.csv")
-
-character_app_train %>%   
-
-model <- glm(TARGET ~ ., family = binomial, data = character_app_train)
-
+# Include
+# NAME_CONTRACT_TYPE
+# CODE_GENDER (?)
+# FLAG_OWN_CAR
+# FLAG_OWN_REALTY
+# NAME_FAMILY_STATUS
+# OCCUPATION_TYPE
+# EMERGENCYSTATE_MODE
 
 ```
 
+```{r}
 
 
+
+```
