@@ -26,54 +26,150 @@ library(rpart)
 library(rpart.plot)
 library(skimr)
 library(janitor)
-
+library(fastDummies)
+library(corrplot)
 ```
 
-#changes
-#changes
 
 ```{r}
 
 app_train <- read.csv("C:\\Users\\gbrown\\OneDrive - uolf.org\\Desktop\\Masters\\IS 6812-001 Seminar 2\\home_credit\\application_train.csv")
 
+sample_train <- sample_n(app_train, 10000)
 
+write_csv(sample_train, "C:\\Users\\gbrown\\OneDrive - uolf.org\\Desktop\\Masters\\IS 6812-001 Seminar 2\\home_credit\\sample_train.csv")
 ```
 
 ```{r}
-
-app_train[] <- lapply(app_train, function(x) {
-  if(is.character(x)) {
-    factor(x)
-  } else {
-    x
-  }
-})
 
 count_missings <- function(x) sum(is.na(x))
 
-glimpse(app_train)
+app_train %>% 
+  summarize_all(count_missings) %>% 
+  select_if(function(x) x > 0)
+app_train %>% 
+  head()
+```
+```{r}
+app_train %>% 
+  summary()
+app_train %>% 
+  filter(DAYS_EMPLOYED == 365243) %>% 
+  nrow()
 
+mean_days_employed <- app_train %>% 
+  filter(DAYS_EMPLOYED != 365243) %>% 
+  summarise(mean_value = mean(DAYS_EMPLOYED, na.rm = TRUE)) %>% 
+  pull(mean_value)
+
+app_train <- app_train %>% 
+  mutate(DAYS_EMPLOYED = ifelse(DAYS_EMPLOYED == 365243,
+                                mean_days_employed,
+                                DAYS_EMPLOYED)) %>% 
+  filter(AMT_INCOME_TOTAL <= 9000000)
+
+app_train %>% 
+  select(AMT_INCOME_TOTAL) %>% 
+  arrange(desc(AMT_INCOME_TOTAL)) %>% 
+  slice_max(order_by = AMT_INCOME_TOTAL, n = 20)
 ```
 
-
 ```{r}
-dim(app_train)
+app_train$TARGET <- factor(app_train$TARGET, levels = c('0', '1'))
 
 app_train %>% 
   count(TARGET) %>% 
   mutate(perc = n/sum(n))
 
 app_train %>% 
-  summarize_all(count_missings) %>% 
-  select_if(function(x) x > 0)
+  count(TARGET) %>% 
+  mutate(perc = n / sum(n)) %>% 
+  ggplot(aes(x = TARGET, y = perc)) +
+  geom_bar(stat = 'identity') +
+  scale_y_continuous(labels = scales::percent_format())
+```
 
-lm(TARGET ~ AMT_ANNUITY, data = app_train) %>% 
-  summary
+
+```{r}
+# function to factor character variables
+# app_train[] <- lapply(app_train, function(x) {
+#   if(is.character(x)) {
+#     factor(x)
+#   } else {
+#     x
+#   }
+# })
+  
+# function to create mean for numeric variables
+app_train[] <- lapply(app_train, function(x) {
+  if(is.numeric(x)) {
+    x[is.na(x)] <- mean(x, na.rm = TRUE)
+  }
+  return(x)
+})
+
+app_train %>%
+  summarize_all(count_missings)
 ```
 
 ```{r}
+numerical_app_train <- app_train %>% 
+  select(-SK_ID_CURR) %>%
+  select(where(is.numeric))
+  
+# Compute the correlation matrix
+cor_matrix <- cor(numerical_app_train, use = "complete.obs")
+print(cor_matrix)
+corrplot(cor_matrix, method = "color", type = "upper", order = "hclust",
+         tl.col = "black", tl.srt = 45, tl.cex = 0.2)
+
+# Assuming 'cor_matrix' is your correlation matrix and 'TARGET' is the variable of interest
+cor_with_target <- cor_matrix["TARGET", ] # Extract correlations with TARGET
+sorted_cor_with_target <- sort(cor_with_target, decreasing = TRUE) # Sort correlations
+
+# View the sorted correlations
+print(sorted_cor_with_target)
+```
+```{r}
+app_train %>% 
+  ggplot()+
+  geom_boxplot(aes(x= TARGET, y= AMT_INCOME_TOTAL))+
+  scale_y_continuous(labels = scales::comma)
+
+```
+
+```{r clusters}
+# Perform hierarchical clustering on the correlation matrix
+hc <- hclust(as.dist(1 - abs(cor_matrix))) # Use absolute values to consider strength regardless of direction
+
+# Reorder the correlation matrix based on the clustering
+cor_matrix_ordered <- cor_matrix[hc$order, hc$order]
+
+# You can then visualize this ordered matrix using corrplot or a similar tool
+
+corrplot(cor_matrix_ordered, order = "hclust", addrect = 5, tl.cex = 0.2) # Adds rectangles to identify clusters
+
+```
 
 
+```{r}
+character_app_train <- app_train %>%
+  select(-SK_ID_CURR) %>%
+  select(where(~ !is.numeric(.))) %>%
+  mutate_if(is.character, as.factor)
+
+glimpse(character_app_train)
+
+sample_character <- sample_n(character_app_train, 10000)
+
+write_csv(sample_character, "C:\\Users\\gbrown\\OneDrive - uolf.org\\Desktop\\Masters\\IS 6812-001 Seminar 2\\home_credit\\sample_character.csv")
+
+character_app_train %>%   
+
+model <- glm(TARGET ~ ., family = binomial, data = character_app_train)
 
 
 ```
+
+
+
