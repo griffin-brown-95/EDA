@@ -1,10 +1,10 @@
 ---
-title: 
+title: "EDA - Home Credit"
 author: "Griffin Brown"
 affiliation-title: "University of Utah"
 date: last-modified
 title-block-style: default
-title-block-banner: "#890000"
+title-block-banner: "#219ebc"
 format: 
   html:
       embed-resources: true
@@ -12,15 +12,17 @@ format:
       code-block-bg: true
       code-block-border-left: "#3ABFC0"
       highlight-style: printing
+      toc: true
 execute:
     message: false
     warning: false
     error: false
-    echo: false
+    echo: true
 ---
 
-```{r setup}
+## Load Packages
 
+```{r setup}
 library(tidyverse)
 library(rpart)
 library(rpart.plot)
@@ -30,44 +32,70 @@ library(fastDummies)
 library(corrplot)
 ```
 
-```{r}
+## Load Data Sets
+
+```{r data}
 
 app_train <- read.csv("C:\\Users\\gbrown\\OneDrive - uolf.org\\Desktop\\Masters\\IS 6812-001 Seminar 2\\home_credit\\application_train.csv")
 
-
 ```
 
-```{r}
+## A quick glance
+
+We can see that the approval for a loan is fairly rare, with a 8% approval rating.
+
+```{r glance}
 app_train$TARGET <- factor(app_train$TARGET)
 
 app_train %>% 
   count(TARGET) %>% 
   mutate(perc = n/sum(n))
+```
 
+Here is the distribution visually.
+
+```{r glance graph}
 app_train %>% 
   count(TARGET) %>% 
   mutate(perc = n / sum(n)) %>% 
   ggplot(aes(x = TARGET, y = perc)) +
   geom_bar(stat = 'identity') +
-  scale_y_continuous(labels = scales::percent_format())
+  scale_y_continuous(labels = scales::percent_format()) +
+  theme_classic()
 ```
+
+## Find Missing Values
+
+There is a lot of missing data in the set.
 
 ```{r}
 
 count_missings <- function(x) sum(is.na(x))
 
-app_train %>% 
-  summarize_all(count_missings) %>% 
-  select_if(function(x) x > 0)
+# no need to display all the missing columns, but 91 have missing values.
+# app_train %>% 
+#   summarize_all(count_missings) %>% 
+#   select_if(function(x) x > 0)
 
 ```
 
-```{r}
-app_train %>% 
-  summary()
-```
+## Weird looking data
+
+There are a couple weird looking data points, DAYS_EMPLOYED and AMT_INCOME_TOTAL immediately jumped out at me. I will not show the summary for readers sake.
 
 ```{r}
+# app_train %>% 
+#   summary()
+```
+
+## Data Cleaning
+
+### DAYS_EMPLOYED
+
+Looking at DAYS_EMPLOYED, there seems to be a huge positive number (we expect negative) of 365243. This is particularly in the "Pensioner" NAME_INCOME_TYPE category.
+
+```{r}
+# this plot serves to add all the DAYS_EMPLOYED up by NAME_INCOME_TYPE
 app_train %>% 
   group_by(NAME_INCOME_TYPE) %>%
   summarize(Total_DAYS_EMPLOYED = sum(DAYS_EMPLOYED, na.rm = TRUE)) %>% 
@@ -75,11 +103,38 @@ app_train %>%
   geom_bar(stat = "identity") +
   scale_y_continuous(labels = scales::comma) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
 
+We can further see that this number seems to be some arbitrary number that is assigned to this category.
+
+```{r}
 app_train %>% 
   filter(DAYS_EMPLOYED == 365243) %>% 
   nrow()
+```
 
+### AMT_INCOME_TOTAL
+
+This variable has some outliers as well. It looks to me like this is their income multiplied by 100. The stakeholder should be followed up with in order to figure this out for sure. Either way, the top responses do not make sense. I will take these rows out.
+
+```{r}
+
+# huge outliers
+app_train %>% 
+  ggplot()+
+  geom_boxplot(aes(x= TARGET, y= AMT_INCOME_TOTAL))+
+  scale_y_continuous(labels = scales::comma)
+
+# top AMT_INCOME_TOTAL
+app_train %>% 
+  select(AMT_INCOME_TOTAL) %>% 
+  arrange(desc(AMT_INCOME_TOTAL)) %>% 
+  slice_max(order_by = AMT_INCOME_TOTAL, n = 10)
+```
+
+The question remains, how would we like to approach these two variables. As a pensioneer, maybe they never have worked, so perhaps 0 would work as a replacement to 365243. For now, I will give it the mean but this can easily be changed with further context. As I mentioned before, I will be taking the top outliers for AMT_TOTAL_INCOME out of the dataset completely.
+
+```{r}
 mean_days_employed <- app_train %>% 
   filter(DAYS_EMPLOYED != 365243) %>% 
   summarise(mean_value = mean(DAYS_EMPLOYED, na.rm = TRUE)) %>% 
@@ -90,23 +145,14 @@ app_train <- app_train %>%
                                 mean_days_employed,
                                 DAYS_EMPLOYED)) %>% 
   filter(AMT_INCOME_TOTAL <= 9000000)
-
-app_train %>% 
-  select(AMT_INCOME_TOTAL) %>% 
-  arrange(desc(AMT_INCOME_TOTAL)) %>% 
-  slice_max(order_by = AMT_INCOME_TOTAL, n = 20)
 ```
 
+## Numeric Predictors
+
+For missing values, I will be giving the mean to NA variables.
+
 ```{r}
-# function to factor character variables
-# app_train[] <- lapply(app_train, function(x) {
-#   if(is.character(x)) {
-#     factor(x)
-#   } else {
-#     x
-#   }
-# })
-  
+
 # function to create mean for numeric variables
 app_train[] <- lapply(app_train, function(x) {
   if(is.numeric(x)) {
@@ -115,51 +161,44 @@ app_train[] <- lapply(app_train, function(x) {
   return(x)
 })
 
-app_train %>%
-  summarize_all(count_missings)
+## no more missing values, no need to display
+# app_train %>%
+#   summarize_all(count_missings)
 ```
+
+### I will use a correlation matrix to find strong numeric predictors.
 
 ```{r}
 numerical_app_train <- app_train %>% 
   select(-SK_ID_CURR) %>%
   select(where(is.numeric))
   
-# Compute the correlation matrix
 cor_matrix <- cor(numerical_app_train, use = "complete.obs")
-print(cor_matrix)
+# print(cor_matrix)
 corrplot(cor_matrix, method = "color", type = "upper", order = "hclust",
          tl.col = "black", tl.srt = 45, tl.cex = 0.2)
-
-# Assuming 'cor_matrix' is your correlation matrix and 'TARGET' is the variable of interest
-cor_with_target <- cor_matrix["TARGET", ] # Extract correlations with TARGET
-sorted_cor_with_target <- sort(cor_with_target, decreasing = TRUE) # Sort correlations
-
-# View the sorted correlations
-print(sorted_cor_with_target)
-```
-
-```{r}
-app_train %>% 
-  ggplot()+
-  geom_boxplot(aes(x= TARGET, y= AMT_INCOME_TOTAL))+
-  scale_y_continuous(labels = scales::comma)
 
 ```
 
 ```{r clusters}
-# Perform hierarchical clustering on the correlation matrix
-hc <- hclust(as.dist(1 - abs(cor_matrix))) # Use absolute values to consider strength regardless of direction
+# attempt to cluster the numeric predictors
+hc <- hclust(as.dist(1 - abs(cor_matrix)))
 
-# Reorder the correlation matrix based on the clustering
 cor_matrix_ordered <- cor_matrix[hc$order, hc$order]
-
-# You can then visualize this ordered matrix using corrplot or a similar tool
 
 corrplot(cor_matrix_ordered, order = "hclust", addrect = 5, tl.cex = 0.2) # Adds rectangles to identify clusters
 
 ```
+### NOTE ON THIS SECTION
+Need more time to find these predictors.
+
+
+## Character Predictors
+
+I will look at character type predictors in another way for simplicity. We can see that ORGANIZATION_TYPE has a lot of levels, so I will omit those.
 
 ```{r}
+# creating character 
 character_app_train <- app_train %>%
   select(-SK_ID_CURR) %>%
   select(where(~ !is.numeric(.))) %>%
@@ -170,22 +209,28 @@ character_app_train %>%
   print()
 ```
 
+Using a logistic regression, the following variables have the highest correlation with the predictor variable. I won't show the entire model.
+
+Include:
+
+-   NAME_CONTRACT_TYPE
+
+-   CODE_GENDER (?)
+
+-   FLAG_OWN_CAR
+
+-   FLAG_OWN_REALTY
+
+-   NAME_FAMILY_STATUS
+
+-   OCCUPATION_TYPE
+
+-   EMERGENCYSTATE_MODE
+
 ```{r}
 # glm(TARGET ~ . - ORGANIZATION_TYPE, family = binomial, data = character_app_train) %>% summary()
 
-# Include
-# NAME_CONTRACT_TYPE
-# CODE_GENDER (?)
-# FLAG_OWN_CAR
-# FLAG_OWN_REALTY
-# NAME_FAMILY_STATUS
-# OCCUPATION_TYPE
-# EMERGENCYSTATE_MODE
-
 ```
 
-```{r}
-
-
-
-```
+## Other File Exploration
+This I will need a bit more time as well. The idea is simple to create summaries based off of SK_ID_CURR and join on the train data.
