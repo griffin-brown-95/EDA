@@ -1,0 +1,55 @@
+
+```{r}
+
+library(tidyverse)
+library(rpart)
+library(rpart.plot)
+
+```
+
+
+
+```{r}
+
+app_train <- read.csv('application_train.csv')
+
+
+```
+
+```{r}
+
+glimpse(app_train)
+
+app_train[] <- lapply(app_train, function(x) {
+  if(is.character(x)) {
+    factor(x)
+  } else {
+    x
+  }
+})
+
+count_missings <- function(x) sum(is.na(x))
+
+glimpse(app_train)
+#ai_tree <- rpart(formula = TARGET ~ ., data = app_train)
+#ai_tree
+#rpart.plot(x = ai_tree, 
+ #          tweak = 2, 
+  #         roundint = F) 
+```
+
+
+```{r}
+dim(app_train)
+
+app_train %>% 
+  count(TARGET) %>% 
+  mutate(perc = n/sum(n))
+
+app_train %>% 
+  summarize_all(count_missings) %>% 
+  select_if(function(x) x > 0)
+
+lm(TARGET ~ AMT_ANNUITY, data = app_train) %>% 
+  summary
+```
