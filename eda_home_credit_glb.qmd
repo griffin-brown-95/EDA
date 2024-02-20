@@ -19,8 +19,8 @@ execute:
     error: false
     echo: true
 ---
-#changes
-## Load Packages
+
+#changes \## Load Packages
 
 ```{r setup}
 library(tidyverse)
@@ -122,7 +122,7 @@ This variable has some outliers as well. It looks to me like this is their incom
 # huge outliers
 app_train %>% 
   ggplot()+
-  geom_boxplot(aes(x= TARGET, y= AMT_INCOME_TOTAL))+
+  geom_boxplot(aes(x = TARGET, y = AMT_INCOME_TOTAL))+
   scale_y_continuous(labels = scales::comma)
 
 # top AMT_INCOME_TOTAL
@@ -170,6 +170,7 @@ app_train[] <- lapply(app_train, function(x) {
 
 ```{r}
 numerical_app_train <- app_train %>% 
+  mutate(TARGET = as.numeric(TARGET)) %>%
   select(-SK_ID_CURR) %>%
   select(where(is.numeric))
   
@@ -180,6 +181,32 @@ corrplot(cor_matrix, method = "color", type = "upper", order = "hclust",
 
 ```
 
+### Logistic Regression
+
+```{r}
+head(numerical_app_train)
+glm(TARGET ~ ., data = numerical_app_train) %>% summary()
+
+```
+
+-   CNT_CHILDREN
+
+-   AMT_CREDIT
+
+-   AMT_ANNUITY
+
+-   AMT_GOODS_PRICE
+
+-   DAYS_BIRTH
+
+-   DAYS_EMPLOYED
+
+-   DAYS_ID_PUBLISH
+
+-   OWN_CAR_AGE
+
+-   FLAG_EMP_PHONE FLAG_WORK_PHONE FLAG_PHONE FLAG_EMAIL CNT_FAM_MEMBERS REGION_RATING_CLIENT_W_CITY REG_CITY_NOT_LIVE_CITY EXT_SOURCE_1 EXT_SOURCE_2 EXT_SOURCE_3 DEF_30_CNT_SOCIAL_CIRCLE DAYS_LAST_PHONE_CHANGE FLAG_DOCUMENT_2 FLAG_DOCUMENT_3 FLAG_DOCUMENT_5 FLAG_DOCUMENT_6 FLAG_DOCUMENT_8 FLAG_DOCUMENT_13 FLAG_DOCUMENT_14 FLAG_DOCUMENT_16 FLAG_DOCUMENT_18 AMT_REQ_CREDIT_BUREAU_YEAR
+
 ```{r clusters}
 # attempt to cluster the numeric predictors
 hc <- hclust(as.dist(1 - abs(cor_matrix)))
@@ -189,9 +216,10 @@ cor_matrix_ordered <- cor_matrix[hc$order, hc$order]
 corrplot(cor_matrix_ordered, order = "hclust", addrect = 5, tl.cex = 0.2) # Adds rectangles to identify clusters
 
 ```
-### NOTE ON THIS SECTION
-Need more time to find these predictors.
 
+### NOTE ON THIS SECTION
+
+Need more time to find these predictors.
 
 ## Character Predictors
 
@@ -229,8 +257,8 @@ Include:
 
 ```{r}
 # glm(TARGET ~ . - ORGANIZATION_TYPE, family = binomial, data = character_app_train) %>% summary()
-
 ```
 
 ## Other File Exploration
+
 This I will need a bit more time as well. The idea is simple to create summaries based off of SK_ID_CURR and join on the train data.
