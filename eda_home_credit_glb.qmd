@@ -32,6 +32,8 @@ library(fastDummies)
 library(corrplot)
 ```
 
+
+
 ## Load Data Sets
 
 ```{r data}
@@ -67,15 +69,16 @@ app_train %>%
 ## Find Missing Values
 
 There is a lot of missing data in the set.
+- not much information for imputation if missing
 
 ```{r}
 
 count_missings <- function(x) sum(is.na(x))
 
 # no need to display all the missing columns, but 91 have missing values.
-# app_train %>% 
-#   summarize_all(count_missings) %>% 
-#   select_if(function(x) x > 0)
+app_train %>%
+  summarize_all(count_missings) %>%
+  select_if(function(x) x > 0)
 
 ```
 
@@ -156,7 +159,7 @@ For missing values, I will be giving the mean to NA variables.
 # function to create mean for numeric variables
 app_train[] <- lapply(app_train, function(x) {
   if(is.numeric(x)) {
-    x[is.na(x)] <- mean(x, na.rm = TRUE)
+    x[is.na(x)] <- median(x, na.rm = TRUE)
   }
   return(x)
 })
