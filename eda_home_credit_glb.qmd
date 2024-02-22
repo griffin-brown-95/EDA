@@ -30,6 +30,8 @@ library(skimr)
 library(janitor)
 library(fastDummies)
 library(corrplot)
+library(corrr)
+library(knitr)
 ```
 
 
@@ -47,9 +49,9 @@ app_train <- read.csv("C:\\Users\\gbrown\\OneDrive - uolf.org\\Desktop\\Masters\
 We can see that the approval for a loan is fairly rare, with a 8% approval rating.
 
 ```{r glance}
-app_train$TARGET <- factor(app_train$TARGET)
+#app_train$TARGET <- factor(app_train$TARGET)
 
-app_train %>% 
+app_train %>%  
   count(TARGET) %>% 
   mutate(perc = n/sum(n))
 ```
@@ -58,6 +60,7 @@ Here is the distribution visually.
 
 ```{r glance graph}
 app_train %>% 
+  mutate(TARGET = factor(TARGET)) %>% 
   count(TARGET) %>% 
   mutate(perc = n / sum(n)) %>% 
   ggplot(aes(x = TARGET, y = perc)) +
@@ -124,6 +127,7 @@ This variable has some outliers as well. It looks to me like this is their incom
 
 # huge outliers
 app_train %>% 
+  mutate(TARGET = factor(TARGET)) %>% 
   ggplot()+
   geom_boxplot(aes(x = TARGET, y = AMT_INCOME_TOTAL))+
   scale_y_continuous(labels = scales::comma)
@@ -173,12 +177,17 @@ app_train[] <- lapply(app_train, function(x) {
 
 ```{r}
 numerical_app_train <- app_train %>% 
-  mutate(TARGET = as.numeric(TARGET)) %>%
   select(-SK_ID_CURR) %>%
   select(where(is.numeric))
-  
+head(numerical_app_train)
+
 cor_matrix <- cor(numerical_app_train, use = "complete.obs")
-# print(cor_matrix)
+cor_matrix['TARGET',] %>% 
+  abs() %>% 
+  sort(decreasing = TRUE) %>% 
+  head(20) %>% 
+  kable(caption = 'Top 20 Correlations with TARGET')
+
 corrplot(cor_matrix, method = "color", type = "upper", order = "hclust",
          tl.col = "black", tl.srt = 45, tl.cex = 0.2)
 
@@ -231,6 +240,7 @@ I will look at character type predictors in another way for simplicity. We can s
 ```{r}
 # creating character 
 character_app_train <- app_train %>%
+  mutate(TARGET = factor(TARGET)) %>% 
   select(-SK_ID_CURR) %>%
   select(where(~ !is.numeric(.))) %>%
   mutate_if(is.character, as.factor)
@@ -259,9 +269,47 @@ Include:
 -   EMERGENCYSTATE_MODE
 
 ```{r}
-# glm(TARGET ~ . - ORGANIZATION_TYPE, family = binomial, data = character_app_train) %>% summary()
+
+categorical_vars <- setdiff(names(character_app_train), "TARGET")
+
+chi_sq_results <- list()
+
+for(var in categorical_vars) {
+
+  character_app_train[[var]] <- as.factor(character_app_train[[var]])
+  
+  test_result <- chisq.test(table(character_app_train[[var]], character_app_train$TARGET))
+
+  chi_sq_results[[var]] <- test_result
+}
+
+chi_sq_results
+
 ```
+```{r}
 
-## Other File Exploration
+# Get the names of all categorical variables excluding the target
+categorical_vars <- setdiff(names(character_app_train), "TARGET")
 
-This I will need a bit more time as well. The idea is simple to create summaries based off of SK_ID_CURR and join on the train data.
+# Initialize an empty list to store the results
+proportions_list <- list()
+
+# Loop through each categorical variable
+for(cat_var in categorical_vars) {
+  # Calculate proportions
+  proportions <- character_app_train %>%
+    count(!!sym(cat_var), TARGET) %>%  # Count combinations of categorical variable and TARGET
+    group_by(!!sym(cat_var)) %>%  # Group by the categorical variable
+    mutate(Proportion = n / sum(n)) %>%  # Calculate proportion within each level of the categorical variable
+    ungroup()  # Remove the grouping
+  
+  # Store the result
+  proportions_list[[cat_var]] <- proportions
+}
+
+# The proportions_list object now contains the proportions for each categorical variable
+# Example to view results for the first variable
+print(proportions_list[[4]])
+
+
+```
