@@ -19,13 +19,14 @@ execute:
     error: false
     echo: true
 ---
+
 # Introduction
-This document serves as an exploration of the the Home Credit Default Risk project. Home Credit serves as an outlet for people to obtain a loan where they may have a lack in traditional credit history. Using numerous variables about each person, the goal is to predict who will potentially default on a loan without using these new predictors. 
+
+This document serves as an exploration of the the Home Credit Default Risk project. Home Credit serves as an outlet for people to obtain a loan where they may have a lack in traditional credit history. Using numerous variables about each person, the goal is to predict who will potentially default on a loan without using these new predictors.
 
 What we will be exploring in this document is the main application data. This covers 122 variables about each applicant to use as predictors. We will split this data by numeric and character type data and find what jumps out as strong predictors.
 
-
-```{r setup, include = false}
+```{r setup, include=FALSE}
 library(tidyverse)
 library(rpart)
 library(rpart.plot)
@@ -41,7 +42,7 @@ library(ggrepel)
 
 # Description
 
-```{r data, include = false}
+```{r data}
 
 app_train <- read.csv("C:\\Users\\gbrown\\OneDrive - uolf.org\\Desktop\\Masters\\IS 6812-001 Seminar 2\\home_credit\\application_train.csv")
 
@@ -54,7 +55,8 @@ app_train %>%
 sapply(app_train,class) %>% 
   table()
 ```
-What we are looking at is a dataset with 307,508 rows and 122 columns. There are 16 character columns, and 106 numeric.
+
+What we are looking at is a dataset with 307,508 rows and 122 columns. There are 16 character columns, and 106 numeric/integer.
 
 ## Approval Rating
 
@@ -70,7 +72,7 @@ app_train %>%
 
 Here is the distribution visually.
 
-```{r glance graph}
+```{r glance_graph}
 app_train %>% 
   mutate(TARGET = factor(TARGET)) %>% 
   count(TARGET) %>% 
@@ -97,6 +99,7 @@ missings <- app_train %>%
 sum(select(missings, where(~. > 10)) != 0)
 
 ```
+
 I chose to experiment with this idea, creating a scatter plot showing the number of missing values vs unique answers to each variable. What I thought this might show me is if a variable had an incredibly high number of missing values, but a low amount of unique answers, this may be an indicator that the variable be categorized. For instance, perhaps a count of children could have a low number of unique answers, but "0" could actually be N/A.
 
 ```{r}
@@ -122,7 +125,8 @@ uniq_vs_miss %>%
   labs(x = "Unique Counts", y = "Missing Values", title = "Scatter Plot of Unique Counts vs Missing Values") +
   theme_minimal()
 ```
-AMT_REQ_CREDIT_BUREAU_HOUR seems to be one of the only variables that might fit this idea, and this represents "Number of enquiries to Credit Bureau about the client one hour before application" which is joined by the same type of variable by day, week, and quarter, so my theory may not have a strong base. 
+
+AMT_REQ_CREDIT_BUREAU_HOUR seems to be one of the only variables that might fit this idea, and this represents "Number of enquiries to Credit Bureau about the client one hour before application" which is joined by the same type of variable by day, week, and quarter, so my theory may not have a strong base.
 
 # Data Cleaning
 
@@ -180,7 +184,7 @@ app_train %>%
   slice_max(order_by = AMT_INCOME_TOTAL, n = 10)
 ```
 
-The question remains, how would we like to approach these two variables. As a pensioner, maybe they never have worked, so perhaps 0 would work as a replacement to 365243. This can easily be changed with further context. As I mentioned before, I will be taking the top outliers for AMT_TOTAL_INCOME out of the dataset completely.
+The question remains, how would we like to approach these two variables. As a pensioner, maybe they never have worked, so perhaps 0 would work as a replacement to 365243. This can easily be changed with further context. As I mentioned before, I will be taking the top outliers for AMT_TOTAL_INCOME out of the dataset completely. I will also be using 10% missing as a cutoff.
 
 ```{r}
 # mean_days_employed <- app_train %>% 
@@ -197,11 +201,11 @@ train <- app_train %>%
   select_if(~ sum(is.na(.)) / nrow(app_train) < 0.1)
 ```
 
+# Splitting the Data
+
 ## Numeric Predictors
 
-For missing values, I will be giving the mean to NA variables.
-
-```{r mean_fxn, include = false}
+```{r mean_fxn, include = FALSE}
 
 # function to create mean for numeric variables
 # app_train[] <- lapply(app_train, function(x) {
@@ -216,7 +220,7 @@ For missing values, I will be giving the mean to NA variables.
 #   summarize_all(count_missings)
 ```
 
-### Correlation Matrix 
+### Correlation Matrix
 
 I will use a correlation matrix to find strong numeric predictors. We see the strongest correlation at 15%, but drops off quite quickly.
 
@@ -232,13 +236,9 @@ cor_matrix['TARGET',] %>%
   # head(50) %>% 
   kable(caption = 'Top Correlations with TARGET')
 
-# corrplot(cor_matrix, method = "color", type = "upper", order = "hclust",
-#          tl.col = "black", tl.srt = 45, tl.cex = 0.2)
-
 ```
 
-
-```{r clusters, include = false}
+```{r clusters, include = FALSE}
 # # attempt to cluster the numeric predictors
 # hc <- hclust(as.dist(1 - abs(cor_matrix)))
 # 
@@ -248,26 +248,17 @@ cor_matrix['TARGET',] %>%
 
 ```
 
-
-
 ## Character Predictors
 
 I will look at character type predictors in another way for simplicity. We can see that ORGANIZATION_TYPE has a lot of levels, so I will omit those.
 
 ```{r}
-# creating character 
+# creating character dataframe
 character_app_train <- train %>%
   mutate(TARGET = factor(TARGET)) %>% 
   select(-SK_ID_CURR) %>%
   select(where(~ !is.numeric(.))) %>%
   mutate_if(is.character, as.factor)
-
-character_app_train %>%
-  summarise(across(where(is.factor), ~nlevels(.))) %>%
-  ggplot(aes()) +
-  geom_bar(stat = "identity") +
-  scale_y_continuous(labels = scales::comma) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 character_app_train %>%
   select(where(is.factor)) %>%
@@ -281,38 +272,21 @@ character_app_train %>%
   theme(legend.position = "none")
 ```
 
+Next we will break down each of the categorical variables as a comparison of the Target outcome to the majority class to identify categories that stick out.
 
 ```{r}
-
-categorical_vars <- setdiff(names(character_app_train), 'TARGET')
-
-proportions_list <- list()
-
-for(cat_var in categorical_vars) {
-
-  proportions <- character_app_train %>%
-    count(!!sym(cat_var), TARGET) %>%
-    group_by(!!sym(cat_var)) %>%
-    mutate(Proportion = n / sum(n)) %>%
-    ungroup()
-  
-  proportions_list[[cat_var]] <- proportions
-}
-
-
 overall_target_prop <- train %>%  
   mutate(TARGET = as.factor(TARGET)) %>% 
   count(TARGET) %>% 
   mutate(perc = n / sum(n))
-overall_target_prop
+
+# get target default values as variable
 target_0 <- overall_target_prop[1,3]
 target_1 <- overall_target_prop[2,3]
 
 ```
 
 ```{r}
-
-
 categorical_vars <- setdiff(names(character_app_train), 'TARGET')
 
 proportions_list <- list()
@@ -323,71 +297,25 @@ for(cat_var in categorical_vars) {
   proportions <- character_app_train %>%
     count(!!sym(cat_var), TARGET, name = "n") %>%
     group_by(!!sym(cat_var)) %>%
-    mutate(Proportion = n / sum(n)) %>%
+    mutate(proportion = n / sum(n)) %>%
     ungroup() %>%
-    # Add the variable name as a column
     mutate(Variable = cat_var, Category = as.character(!!sym(cat_var))) %>%
-    # Select and rename columns to match the desired output
-    select(Variable, Category, TARGET, n, Proportion)
+    select(Variable, Category, TARGET, n, proportion)
   
   proportions_list[[cat_var]] <- proportions
 }
 
-# Combine all proportions into a single dataframe
+# Combine all proportions into a single dataframe, add other columns
 combined_proportions <- bind_rows(proportions_list) %>% 
   mutate(default_target = ifelse(TARGET == 0, target_0, target_1),
-         threshold = abs(Proportion - default_target))
+         difference = abs(proportion - default_target))
 combined_proportions %>% 
-  arrange(desc(threshold)) %>% 
+  arrange(desc(difference)) %>% 
+  filter(n > 1000) %>% 
   head(10)
 
-# # Print the combined dataframe
-# combined_proportions %>% 
-#   filter(threshold == TRUE)
-
-
 ```
 
-```{r}
-for(cat_var in categorical_vars) {
-  proportions_list[[cat_var]] <- proportions_list[[cat_var]] %>%
-    left_join(overall_target_prop, by = "TARGET") %>%
-    # Add the default_target column by comparing if proportion > perc
-    mutate(default_target = ifelse(Proportion > perc, "Above", "Below"))
-}
+# Results
 
-# Combine all data frames into one
-final_table <- bind_rows(proportions_list, .id = "Variable")
-
-final_table
-```
-
-```{r}
-library(dplyr)
-
-# Define a dataframe to accumulate results
-combined_proportions <- tibble()
-
-# Loop through categorical variables
-for(cat_var in categorical_vars) {
-  # Compute proportions for each category within the variable
-  proportions <- character_app_train %>%
-    count(!!sym(cat_var), TARGET, name = "n") %>%
-    group_by(!!sym(cat_var)) %>%
-    mutate(Proportion = n / sum(n)) %>%
-    ungroup() %>%
-    # Add the variable name as a column
-    mutate(Variable = cat_var, Category = as.character(!!sym(cat_var))) %>%
-    # Select and rename columns to match the desired output
-    select(Variable, Category, TARGET, n, Proportion)
-  
-  # Bind the current proportions dataframe to the combined result
-  combined_proportions <- bind_rows(combined_proportions, proportions)
-}
-
-# Print the combined dataframe
-combined_proportions %>% 
-  mutate(default_target = ifelse(TARGET = 0, ))
-
-
-```
+In summary, I identified columns that we could omit due to missing data, adjusted outliers and weird pieces of data to create a more workable dataset. I then split this between numeric and character data. With the numeric data, correlations were shown between the target and the other variables. With the character/categorical data, we found identifiers of high difference between the actual proportion of the target and the default majority class proportion of the target variable. Using this going forward, a modeling will become much easier.
