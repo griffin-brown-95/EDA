@@ -20,6 +20,11 @@ execute:
     echo: true
 ---
 
+```{r}
+print('hello world')
+
+```
+
 # Introduction
 
 This document serves as an exploration of the the Home Credit Default Risk project. Home Credit serves as an outlet for people to obtain a loan where they may have a lack in traditional credit history. Using numerous variables about each person, the goal is to predict who will potentially default on a loan without using these new predictors.
@@ -49,6 +54,10 @@ app_train <- read.csv("C:\\Users\\gbrown\\OneDrive - uolf.org\\Desktop\\Masters\
 ```
 
 ```{r}
+app_train %>% 
+  select(EXT_SOURCE_2) %>% 
+  unique()
+
 app_train %>% 
   dim()
 
